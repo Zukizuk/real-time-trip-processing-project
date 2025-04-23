@@ -2,12 +2,13 @@ import json
 import boto3
 import base64
 from datetime import datetime
-from decimal import Decimal  # Import Decimal
+from decimal import Decimal
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table('trip-table')
+table = dynamodb.Table('NSP_Bolt_Trips')
 
+# Initialize Lambda client for invoking the aggregator
 lambda_client = boto3.client('lambda')
 
 def lambda_handler(event, context):
@@ -25,74 +26,55 @@ def lambda_handler(event, context):
             response = table.get_item(Key={'trip_id': trip_id})
             
             if 'Item' not in response:
-                # This is a trip end without a corresponding start
-                # Consider this an edge case - create a new record with status "partial"
-                print(f"Warning: Trip end received for unknown trip_id: {trip_id}")
-                item = {
-                    'trip_id': trip_id,
-                    'trip_status': 'partial',
-                    # Add trip end data
-                    'dropoff_datetime': trip_end_data['dropoff_datetime'],
-                    'rate_code': Decimal(trip_end_data['rate_code']),  # Use Decimal
-                    'passenger_count': Decimal(trip_end_data['passenger_count']),  # Use Decimal
-                    'trip_distance': Decimal(trip_end_data['trip_distance']),  # Use Decimal
-                    'fare_amount': Decimal(trip_end_data['fare_amount']),  # Use Decimal
-                    'tip_amount': Decimal(trip_end_data['tip_amount']),  # Use Decimal
-                    'payment_type': Decimal(trip_end_data['payment_type']),  # Use Decimal
-                    'trip_type': Decimal(trip_end_data['trip_type']),  # Use Decimal
-                    'update_timestamp': datetime.now().isoformat()
-                }
-                table.put_item(Item=item)
-            else:
-                # This is an update to an existing trip record
-                existing_item = response['Item']
-                
-                # Extract the date from dropoff_datetime for aggregation
-                dropoff_datetime = trip_end_data['dropoff_datetime']
-                completion_date = dropoff_datetime.split()[0]  # Format: YYYY-MM-DD
-                
-                # Update the trip record
-                update_expression = """
-                    SET trip_status = :status,
-                        dropoff_datetime = :dropoff_datetime,
-                        rate_code = :rate_code,
-                        passenger_count = :passenger_count,
-                        trip_distance = :trip_distance,
-                        fare_amount = :fare_amount,
-                        tip_amount = :tip_amount,
-                        payment_type = :payment_type,
-                        trip_type = :trip_type,
-                        completion_date = :completion_date,
-                        update_timestamp = :update_timestamp
-                """
-                
-                expression_values = {
-                    ':status': 'completed',
-                    ':dropoff_datetime': trip_end_data['dropoff_datetime'],
-                    ':rate_code': Decimal(trip_end_data['rate_code']),  # Use Decimal
-                    ':passenger_count': Decimal(trip_end_data['passenger_count']),  # Use Decimal
-                    ':trip_distance': Decimal(trip_end_data['trip_distance']),  # Use Decimal
-                    ':fare_amount': Decimal(trip_end_data['fare_amount']),  # Use Decimal
-                    ':tip_amount': Decimal(trip_end_data['tip_amount']),  # Use Decimal
-                    ':payment_type': Decimal(trip_end_data['payment_type']),  # Use Decimal
-                    ':trip_type': Decimal(trip_end_data['trip_type']),  # Use Decimal
-                    ':completion_date': completion_date,
-                    ':update_timestamp': datetime.now().isoformat()
-                }
-                
-                # Update the DynamoDB record
-                table.update_item(
-                    Key={'trip_id': trip_id},
-                    UpdateExpression=update_expression,
-                    ExpressionAttributeValues=expression_values
-                )
-                
-                print(f"Successfully updated trip record for trip_id: {trip_id}")
-                
-                # Trigger the aggregation Lambda only for completed trips
-                if existing_item.get('trip_status') != 'completed':
-                    # This is the first time this trip is being marked as completed
-                    trigger_aggregation(completion_date, trip_end_data['fare_amount'])
+                # Trip start data isn't in the database yet - log the error and skip
+                # Later archive this to S3 for further analysis
+                print(f"Error: Trip end received for unknown trip_id: {trip_id}. Skipping.")
+                continue
+            
+            # Extract the date from dropoff_datetime for aggregation
+            dropoff_datetime = trip_end_data['dropoff_datetime']
+            completion_date = dropoff_datetime.split()[0]  # Format: YYYY-MM-DD
+            
+            # Update the trip record
+            update_expression = """
+                SET trip_status = :status,
+                    dropoff_datetime = :dropoff_datetime,
+                    rate_code = :rate_code,
+                    passenger_count = :passenger_count,
+                    trip_distance = :trip_distance,
+                    fare_amount = :fare_amount,
+                    tip_amount = :tip_amount,
+                    payment_type = :payment_type,
+                    trip_type = :trip_type,
+                    completion_date = :completion_date,
+                    update_timestamp = :update_timestamp
+            """
+            
+            expression_values = {
+                ':status': 'completed',
+                ':dropoff_datetime': trip_end_data['dropoff_datetime'],
+                ':rate_code': Decimal(trip_end_data['rate_code']),
+                ':passenger_count': Decimal(trip_end_data['passenger_count']),
+                ':trip_distance': Decimal(trip_end_data['trip_distance']),
+                ':fare_amount': Decimal(trip_end_data['fare_amount']),
+                ':tip_amount': Decimal(trip_end_data['tip_amount']),
+                ':payment_type': Decimal(trip_end_data['payment_type']),
+                ':trip_type': Decimal(trip_end_data['trip_type']),
+                ':completion_date': completion_date,
+                ':update_timestamp': datetime.now().isoformat()
+            }
+            
+            # Update the DynamoDB record
+            table.update_item(
+                Key={'trip_id': trip_id},
+                UpdateExpression=update_expression,
+                ExpressionAttributeValues=expression_values
+            )
+            
+            print(f"Successfully updated trip record for trip_id: {trip_id}")
+            
+            # Trigger the aggregation Lambda for completed trips
+            trigger_aggregation(completion_date, Decimal(trip_end_data['fare_amount']))
                 
         except Exception as e:
             print(f"Error processing trip end for trip_id: {trip_id}")
