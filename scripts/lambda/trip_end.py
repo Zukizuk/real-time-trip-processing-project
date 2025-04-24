@@ -6,10 +6,8 @@ from decimal import Decimal
 
 # Initialize DynamoDB client
 dynamodb = boto3.resource('dynamodb')
-table = dynamodb.Table('NSP_Bolt_Trips')
+table = dynamodb.Table('trip-table')
 
-# Initialize Lambda client for invoking the aggregator
-lambda_client = boto3.client('lambda')
 
 def lambda_handler(event, context):
     # Process each record from Kinesis
@@ -72,10 +70,6 @@ def lambda_handler(event, context):
             )
             
             print(f"Successfully updated trip record for trip_id: {trip_id}")
-            
-            # Trigger the aggregation Lambda for completed trips
-            trigger_aggregation(completion_date, Decimal(trip_end_data['fare_amount']))
-                
         except Exception as e:
             print(f"Error processing trip end for trip_id: {trip_id}")
             print(f"Error: {str(e)}")
@@ -84,6 +78,3 @@ def lambda_handler(event, context):
         'statusCode': 200,
         'body': json.dumps('Trip end events processed successfully')
     }
-
-def trigger_aggregation(date, fare_amount):
-    pass

@@ -10,7 +10,7 @@ s3 = boto3.client('s3')
 table = dynamodb.Table('trip-table')
 
 # Configuration
-S3_BUCKET = 'nsp-bolt-metrics-zuki'
+S3_BUCKET = 'your-bucket'
 S3_PREFIX = 'daily'
 
 def lambda_handler(event, context):
