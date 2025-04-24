@@ -12,7 +12,7 @@ The system implements three main Lambda functions:
 
 ## 🏛️ Architecture
 
-![Architecture Diagram](assets/images/architecture.png)
+![Architecture Diagram](assets/images/Architecture.png)
 _Figure 1: System Architecture showing the flow of trip data through AWS services_
 
 <details>
