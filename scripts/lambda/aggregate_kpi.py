@@ -7,39 +7,49 @@ from boto3.dynamodb.conditions import Key, Attr
 # Initialize clients
 dynamodb = boto3.resource('dynamodb')
 s3 = boto3.client('s3')
-table = dynamodb.Table('NSP_Bolt_Trips')
+table = dynamodb.Table('trip-table')
 
 # Configuration
-S3_BUCKET = 'nsp-bolt-metrics'
+S3_BUCKET = 'nsp-bolt-metrics-zuki'
 S3_PREFIX = 'daily'
 
 def lambda_handler(event, context):
-    # Determine if this is a batch update or full refresh
-    operation_type = event.get('type', 'full_refresh')
-    date = event.get('date')
-    
-    if not date:
+    # Determine which date to process
+    target_date = event.get('date')
+    if not target_date:
         # Default to yesterday if no date provided
-        date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
     
-    # Perform the aggregation (same logic for both batch and full refresh)
-    metrics = aggregate_daily_metrics(date)
+    print(f"Starting aggregation for date: {target_date}")
+    
+    # Aggregate metrics for the target date
+    metrics = aggregate_daily_metrics(target_date)
+    
+    # Save to S3
+    s3_key = f"{S3_PREFIX}/{target_date}/metrics.json"
+    s3.put_object(
+        Bucket=S3_BUCKET,
+        Key=s3_key,
+        Body=json.dumps(metrics, indent=2),
+        ContentType='application/json'
+    )
+    
+    print(f"Successfully saved metrics to S3: {s3_key}")
     
     return {
         'statusCode': 200,
-        'body': json.dumps(f'Metrics updated for {date}')
+        'body': json.dumps(f'Metrics updated for {target_date}')
     }
 
 def aggregate_daily_metrics(date):
     """Calculate metrics for all completed trips on a given date"""
     try:
         # Query DynamoDB for all completed trips on this date
-        # Using query instead of scan for better performance
         response = table.query(
-            IndexName='CompletionDateIndex',  # You'll need to create this GSI
-            KeyConditionExpression=Key('completion_date').eq(date),
-            FilterExpression=Attr('trip_status').eq('completed')
-        )
+    IndexName='CompletionDateStatusIndex',
+    KeyConditionExpression=Key('completion_date').eq(date) & Key('trip_status').eq('completed')
+)
+
         
         items = response.get('Items', [])
         
@@ -65,7 +75,7 @@ def aggregate_daily_metrics(date):
                     'max_fare': 0,
                     'min_fare': 0
                 },
-                'last_updated': datetime.now().isoformat(),
+                'generated_at': datetime.now().isoformat(),
                 'trip_count': 0
             }
         else:
@@ -82,31 +92,13 @@ def aggregate_daily_metrics(date):
                     'max_fare': round(max(fare_amounts), 2) if fare_amounts else 0,
                     'min_fare': round(min(fare_amounts), 2) if fare_amounts else 0
                 },
-                'last_updated': datetime.now().isoformat(),
+                'generated_at': datetime.now().isoformat(),
                 'trip_count': count_trips
             }
-        
-        # Save metrics to S3
-        save_metrics_to_s3(date, metrics)
         
         print(f"Successfully aggregated metrics for date: {date}, found {len(items)} completed trips")
         return metrics
         
     except Exception as e:
         print(f"Error aggregating daily metrics: {str(e)}")
-        raise
-
-def save_metrics_to_s3(date, metrics):
-    """Save metrics to S3"""
-    try:
-        s3_key = f"{S3_PREFIX}/{date}/metrics.json"
-        s3.put_object(
-            Bucket=S3_BUCKET,
-            Key=s3_key,
-            Body=json.dumps(metrics, indent=2),
-            ContentType='application/json'
-        )
-        print(f"Successfully saved metrics to S3: {s3_key}")
-    except Exception as e:
-        print(f"Error saving metrics to S3: {str(e)}")
         raise
