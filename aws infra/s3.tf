@@ -1,5 +1,5 @@
 resource "aws_s3_bucket" "my_bucket" {
-  bucket = "nsp-bolt-metrics-zuki"
+  bucket = "your-bucket"
 
   tags = {
     "project" = "project-7"
