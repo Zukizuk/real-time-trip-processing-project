@@ -24,8 +24,8 @@ resource "aws_lambda_event_source_mapping" "trip_start_event_source_mapping" {
   event_source_arn                   = aws_kinesis_stream.trip_start_stream.arn
   function_name                      = aws_lambda_function.trip_start_lambda.arn
   starting_position                  = "LATEST"
-  batch_size                         = 10
-  maximum_batching_window_in_seconds = 10
+  batch_size                         = 50
+  maximum_batching_window_in_seconds = 50
   tags = {
     "project" = "project-7"
   }
@@ -35,8 +35,8 @@ resource "aws_lambda_event_source_mapping" "trip_end_event_source_mapping" {
   event_source_arn                   = aws_kinesis_stream.trip_end_stream.arn
   function_name                      = aws_lambda_function.trip_end_lambda.arn
   starting_position                  = "LATEST"
-  batch_size                         = 10
-  maximum_batching_window_in_seconds = 10
+  batch_size                         = 50
+  maximum_batching_window_in_seconds = 50
   tags = {
     "project" = "project-7"
   }

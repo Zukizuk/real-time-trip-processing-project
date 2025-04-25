@@ -2,7 +2,7 @@ import json
 import boto3
 import os
 from datetime import datetime, timedelta
-from boto3.dynamodb.conditions import Key, Attr
+from boto3.dynamodb.conditions import Key
 
 # Initialize clients
 dynamodb = boto3.resource('dynamodb')
@@ -45,20 +45,19 @@ def aggregate_daily_metrics(date):
     """Calculate metrics for all completed trips on a given date"""
     try:
         # Query DynamoDB for all completed trips on this date
+        # Using the correct GSI name and key conditions
         response = table.query(
-    IndexName='CompletionDateStatusIndex',
-    KeyConditionExpression=Key('completion_date').eq(date) & Key('trip_status').eq('completed')
-)
-
+            IndexName='CompletionDateStatusIndex',
+            KeyConditionExpression=Key('completion_date').eq(date) & Key('trip_status').eq('completed')
+        )
         
         items = response.get('Items', [])
         
         # Continue querying if we have more items (pagination)
         while 'LastEvaluatedKey' in response:
             response = table.query(
-                IndexName='CompletionDateIndex',
-                KeyConditionExpression=Key('completion_date').eq(date),
-                FilterExpression=Attr('trip_status').eq('completed'),
+                IndexName='CompletionDateStatusIndex',  # Corrected index name here too
+                KeyConditionExpression=Key('completion_date').eq(date) & Key('trip_status').eq('completed'),
                 ExclusiveStartKey=response['LastEvaluatedKey']
             )
             items.extend(response.get('Items', []))

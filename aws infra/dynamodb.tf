@@ -1,7 +1,10 @@
 resource "aws_dynamodb_table" "trip_table" {
   name     = "trip-table"
-  hash_key = "completion_date"
-
+  hash_key = "trip_id"
+  attribute {
+    name = "trip_id"
+    type = "S"
+  }
   attribute {
     name = "completion_date"
     type = "S"

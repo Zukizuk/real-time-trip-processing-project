@@ -1,0 +1,12 @@
+{
+  "date": "2024-05-25",
+  "metrics": {
+    "total_fare": 240096.0,
+    "count_trips": 4365,
+    "average_fare": 55.0,
+    "max_fare": 99.99,
+    "min_fare": 10.04
+  },
+  "generated_at": "2025-04-25T11:26:43.595168",
+  "trip_count": 4365
+}
